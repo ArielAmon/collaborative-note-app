@@ -1,4 +1,4 @@
-##Link to video demonstrating the Application in action
+## Link to video demonstrating the Application in action
 https://drive.google.com/file/d/1aJnNrOkyEGhe-w7P2JZSKpPAoS6B7Q9N/view?usp=drive_link
 
 # Getting Started with Create React App
