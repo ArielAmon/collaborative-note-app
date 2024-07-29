@@ -12,6 +12,8 @@ import {
   query,
   where,
   getDocs,
+  arrayUnion,
+  arrayRemove,
 } from "firebase/firestore";
 import {
   TextField,
@@ -27,16 +29,30 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
 } from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useAuth } from "../../services/contexts/AuthContext";
 import VersionHistory from "./VersionHistory";
 
 function NoteEditor() {
-  const [note, setNote] = useState({ title: "", content: "", category: "" });
+  const [note, setNote] = useState({
+    title: "",
+    content: "",
+    category: "",
+    sharedWith: [],
+  });
   const [categories, setCategories] = useState([]);
   const [openVersionHistory, setOpenVersionHistory] = useState(false);
   const [openAddCategory, setOpenAddCategory] = useState(false);
+  const [openShareDialog, setOpenShareDialog] = useState(false);
   const [newCategory, setNewCategory] = useState("");
+  const [shareEmail, setShareEmail] = useState("");
+  const [activeUsers, setActiveUsers] = useState([]);
   const { id } = useParams();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -62,7 +78,7 @@ function NoteEditor() {
 
   useEffect(() => {
     if (id === "new") {
-      setNote({ title: "", content: "", category: "" });
+      setNote({ title: "", content: "", category: "", sharedWith: [] });
     } else {
       const unsubscribe = onSnapshot(doc(db, "notes", id), (doc) => {
         if (doc.exists()) {
@@ -76,9 +92,25 @@ function NoteEditor() {
     }
   }, [id, navigate]);
 
+  useEffect(() => {
+    if (id !== "new") {
+      const unsubscribe = onSnapshot(doc(db, "notes", id), (docSnapshot) => {
+        const data = docSnapshot.data();
+        if (data && data.activeUsers) {
+          setActiveUsers(data.activeUsers);
+        }
+      });
+
+      return () => unsubscribe();
+    }
+  }, [id]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setNote((prevNote) => ({ ...prevNote, [name]: value }));
+    if (id !== "new") {
+      updateDoc(doc(db, "notes", id), { [name]: value });
+    }
   };
 
   const handleSave = async () => {
@@ -125,6 +157,22 @@ function NoteEditor() {
       setNewCategory("");
       setOpenAddCategory(false);
     }
+  };
+
+  const handleShare = async () => {
+    if (shareEmail.trim() !== "") {
+      await updateDoc(doc(db, "notes", id), {
+        sharedWith: arrayUnion(shareEmail.trim()),
+      });
+      setShareEmail("");
+      setOpenShareDialog(false);
+    }
+  };
+
+  const handleRemoveShare = async (email) => {
+    await updateDoc(doc(db, "notes", id), {
+      sharedWith: arrayRemove(email),
+    });
   };
 
   return (
@@ -199,12 +247,47 @@ function NoteEditor() {
               <Button
                 onClick={() => setOpenVersionHistory(true)}
                 variant="outlined"
+                sx={{ mr: 2 }}
               >
                 Version History
+              </Button>
+              <Button
+                onClick={() => setOpenShareDialog(true)}
+                variant="outlined"
+              >
+                Share
               </Button>
             </>
           )}
         </Grid>
+        {activeUsers.length > 0 && (
+          <Grid item xs={12}>
+            <Typography variant="subtitle1">
+              Active users: {activeUsers.join(", ")}
+            </Typography>
+          </Grid>
+        )}
+        {note.sharedWith && note.sharedWith.length > 0 && (
+          <Grid item xs={12}>
+            <Typography variant="h6">Shared with:</Typography>
+            <List>
+              {note.sharedWith.map((email) => (
+                <ListItem key={email}>
+                  <ListItemText primary={email} />
+                  <ListItemSecondaryAction>
+                    <IconButton
+                      edge="end"
+                      aria-label="delete"
+                      onClick={() => handleRemoveShare(email)}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              ))}
+            </List>
+          </Grid>
+        )}
       </Grid>
       {id !== "new" && (
         <VersionHistory
@@ -230,6 +313,25 @@ function NoteEditor() {
         <DialogActions>
           <Button onClick={() => setOpenAddCategory(false)}>Cancel</Button>
           <Button onClick={handleAddCategory}>Add</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={openShareDialog} onClose={() => setOpenShareDialog(false)}>
+        <DialogTitle>Share Note</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Email Address"
+            type="email"
+            fullWidth
+            variant="outlined"
+            value={shareEmail}
+            onChange={(e) => setShareEmail(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenShareDialog(false)}>Cancel</Button>
+          <Button onClick={handleShare}>Share</Button>
         </DialogActions>
       </Dialog>
     </Paper>

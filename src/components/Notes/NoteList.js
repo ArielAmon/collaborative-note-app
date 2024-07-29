@@ -19,11 +19,13 @@ import { Link } from "react-router-dom";
 
 function NoteList() {
   const [notes, setNotes] = useState({});
+  const [sharedNotes, setSharedNotes] = useState([]);
   const [categories, setCategories] = useState([]);
   const { currentUser } = useAuth();
 
   useEffect(() => {
     let notesUnsubscribe = () => {};
+    let sharedNotesUnsubscribe = () => {};
     let categoriesUnsubscribe = () => {};
 
     if (currentUser) {
@@ -44,6 +46,18 @@ function NoteList() {
         setNotes(notesData);
       });
 
+      const sharedNotesQuery = query(
+        collection(db, "notes"),
+        where("sharedWith", "array-contains", currentUser.email)
+      );
+      sharedNotesUnsubscribe = onSnapshot(sharedNotesQuery, (querySnapshot) => {
+        const sharedNotesData = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setSharedNotes(sharedNotesData);
+      });
+
       const categoriesQuery = query(
         collection(db, "categories"),
         where("userId", "==", currentUser.uid)
@@ -59,6 +73,7 @@ function NoteList() {
 
     return () => {
       notesUnsubscribe();
+      sharedNotesUnsubscribe();
       categoriesUnsubscribe();
     };
   }, [currentUser]);
@@ -143,6 +158,34 @@ function NoteList() {
             </Accordion>
           )}
         </Grid>
+        {sharedNotes.length > 0 && (
+          <Grid item xs={12}>
+            <Accordion>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="h6">Shared With You</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <List>
+                  {sharedNotes.map((note) => (
+                    <ListItem
+                      key={note.id}
+                      button
+                      component={Link}
+                      to={`/note/${note.id}`}
+                    >
+                      <ListItemText
+                        primary={note.title}
+                        secondary={`Shared by: ${note.userId}`}
+                        primaryTypographyProps={{ variant: "h6" }}
+                        secondaryTypographyProps={{ variant: "body2" }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </AccordionDetails>
+            </Accordion>
+          </Grid>
+        )}
       </Grid>
     </Paper>
   );
